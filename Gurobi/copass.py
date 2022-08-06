@@ -328,7 +328,7 @@ def checkWaitTime(arrivalTime,passTime,HV):
 
 if __name__ == "__main__":
     meanInterval = 2
-    testCount = 50
+    testCount = 1
     MILPcosts = []
     MILP2costs = []
 
@@ -352,7 +352,7 @@ if __name__ == "__main__":
         successCount = testCount
         i = 0
         while i < testCount:
-            arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,4,[(0,1),(2,3)])
+            arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,5,[(0,1),(2,3)])
             #print(arrivalTime)
             #print(HV)
             #print(Copass)
@@ -407,7 +407,7 @@ if __name__ == "__main__":
     
     print(avgHVWaitTime)
     print(avgCAVWaitTime)
-    print(avgRuntimes,sum(avgRuntimes)/len(avgRuntimes))
+    print('runtime',avgRuntimes,sum(avgRuntimes)/len(avgRuntimes))
     print(MILPcosts)
     print(FCFScosts)
 
@@ -428,7 +428,7 @@ if __name__ == "__main__":
     #fig.savefig('MILP'+ str(meanInterval) + '.svg')
     #fig.savefig('WaitTime'+ str(meanInterval) + '.svg')
     fig.savefig('HVSchedulableWaitTime'+ str(meanInterval) + '.svg')
-
+    exit()
     df = pd.DataFrame({
         'MILP': MILPcosts,
         'MILP(HV schedulable)': MILP2costs,
