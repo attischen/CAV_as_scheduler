@@ -1,10 +1,12 @@
-from copass import *
-from MILPSubproblem import *
+from MILP import *
 import time 
+import csv
+import pandas as pd
+RESULTPATH = "./results/DP.csv"
 
-def solveDP(arrivalTime,HV,Copass,P1=1,P2=3):
+def DP(arrivalTime,HV,Copass,P1=1,P2=3):
 	zeros =  np.zeros(len(arrivalTime),dtype = 'int')
-	table = {}
+	table = {} # DP table store the solved pass time of each vehicle
 	def MinPass(Pass):
 		if tuple(Pass) in table:
 			return table[tuple(Pass)]
@@ -12,6 +14,7 @@ def solveDP(arrivalTime,HV,Copass,P1=1,P2=3):
 		if np.array_equal(Pass,zeros):
 			table[tuple(Pass)] = 0
 			return 0
+
 		mint = math.inf
 		for i,a in enumerate(arrivalTime):
 			if Pass[i] == 0:
@@ -25,6 +28,7 @@ def solveDP(arrivalTime,HV,Copass,P1=1,P2=3):
 		table[tuple(Pass)] = mint
 		return mint
 
+	# get the pass time(time gap) based on the current state of lanes
 	def PassTime(Pass):
 		for i,n in enumerate(Pass):
 			if n >= len(HV[i]):
@@ -32,6 +36,8 @@ def solveDP(arrivalTime,HV,Copass,P1=1,P2=3):
 			if HV[i][n]:
 				return P2
 		return P1
+
+	# if the vehicle from lane i can pass next based on the state of lanes (No passing before a HV which arrived earlier)
 	def Legal(Pass,i):
 		for j,n in enumerate(Pass):
 			if j == i:
@@ -50,59 +56,44 @@ def solveDP(arrivalTime,HV,Copass,P1=1,P2=3):
 	startTime  = time.time()
 	cost = MinPass(Pass)
 	runtime = time.time() - startTime
-	print(cost)
 	return cost,runtime
 
 if __name__ == '__main__':
-	meanInterval = 2
-	testCount = 10
+	MEANINTERVAL = 2
+	TESTCOUNT = 1
 	DPcosts = []
 	FCFScosts = []
 	avgRuntimes = []
 	Ratios = []
 	for HVratio in np.arange(0,1.1,0.1):
-		print("ratio:", HVratio)
 		FCFScost = 0
 		DPcost = 0
 		avgRuntime = 0
-		successCount = testCount
+		successCount = TESTCOUNT
 		i = 0
-		while i < testCount:
-			arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,10,[])
+		while i < TESTCOUNT:
+			arrivalTime,HV,Copass = GenerateTestCase(HVratio,MEANINTERVAL,4,10,[])
 
-			cost,runtime = solveDP(arrivalTime,HV,Copass)
-			if cost == -1: #gurobi solve fail
-				continue
-
+			cost,runtime = DP(arrivalTime,HV,Copass)
 			DPcost += cost 
-			t,cost = solveFCFS(arrivalTime,HV,Copass)
+			t,cost = FCFS(arrivalTime,HV,Copass)
 			FCFScost += cost
 			avgRuntime += runtime
-			#t,cost = solveDP(arrivalTime,HV,Copass)
-			#DPcost += cost
-			np.set_printoptions(precision=2)
-			print('FCFS cost:',cost)
-			print(t)
+			np.set_printoptions(precision=3)
 			i += 1
-		avgRuntime /= testCount
-		DPcost /= testCount
-		FCFScost /= testCount
-		print(DPcost)
-		print(FCFScost)
+		avgRuntime /= TESTCOUNT
+		DPcost /= TESTCOUNT
+		FCFScost /= TESTCOUNT
 		avgRuntimes.append(round(avgRuntime,3))
-		DPcosts.append(round(DPcost,2))
-		FCFScosts.append(round(FCFScost,2))
-		Ratios.append(round(DPcost/FCFScost,2))
-			
-	print(DPcosts)
-	print(FCFScosts)
-	print(avgRuntimes,sum(avgRuntimes)/len(avgRuntimes))
-	plt.plot(np.arange(0.0,1.1,0.1),DPcosts,label = "DP")
-	plt.plot(np.arange(0.0,1.1,0.1),FCFScosts,label = "FCFS")
-	#plt.plot(np.arange(0.0,1.1,0.1),Ratios,label = "N=10")
+		DPcosts.append(round(DPcost,3))
+		FCFScosts.append(round(FCFScost,3))
+		Ratios.append(round(DPcost/FCFScost,3))
+	
 
-	plt.xlabel('HVRatio')
-	plt.ylabel('Cost(s)')
-	plt.legend()
-	fig = plt.gcf() 
-	fig.savefig('DP_FCFSplot'+ str(meanInterval) + '.svg')
+	df = pd.DataFrame({
+		'DP': DPcosts,
+		'FCFS': FCFScosts,
+		'runtime': avgRuntimes,
+		},index = np.arange(0,1.1,0.1))
+	df.index.name = "HV Ratio"
+	df.to_csv(RESULTPATH)

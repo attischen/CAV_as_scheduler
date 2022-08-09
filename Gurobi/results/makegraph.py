@@ -20,7 +20,7 @@ plt.rcParams['text.usetex'] = True
 
 
 df = pd.read_csv(sys.argv[1])
-df.columns=['HV Ratio',"$\it{N}$ = 12 (No Subproblem)","$\it{N}$ = 36 (Subproblem Size = 12)"]
+#df.columns=['HV Ratio',"$\it{N}$ = 12 (No Subproblem)","$\it{N}$ = 36 (Subproblem Size = 12)"]
 #df.columns=['HV Ratio','FCFS','Subcase size=4','Subcase size=12','Subcase size=20']
 df.plot(x="HV Ratio")
 

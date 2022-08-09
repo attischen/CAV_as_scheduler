@@ -18,14 +18,10 @@ mpl.rcParams['axes.prop_cycle'] = cycler(color=['r', 'y', 'y', 'm'],marker=['D',
 #FCFS: Green line round marker
 #MILP: Blue line sqaure marker
 
-
 df = pd.read_csv(sys.argv[1])
-#df.columns=['HV Ratio','$N$=12 (No Subcasing)','$N$=36 (Subcase Size=12)']
-#df.columns=['HV Ratio','FCFS','Subcase size=4','Subcase size=12','Subcase size=20']
 df.plot(x="HV Ratio")
 
 plt.ylabel("Average Waiting Time (second)")
-#plt.ylabel("Objective Ratio to FCFS")
 plt.grid()
 plt.savefig(sys.argv[1].strip(".csv")+"test.svg", bbox_inches = 'tight')
 

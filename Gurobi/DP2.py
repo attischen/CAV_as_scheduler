@@ -50,7 +50,7 @@ def solveDP2(arrivalTime,HV,Copass,P1=1,P2=3):
 		table[tuple(Pass,lastPassLane,copassT)] = mint
 		return mint
 
-	def PassTime(Pass,lastPass,tau):
+	def PassTime(Pass,lastPass,tau,t):
 		if tau == 0: # empty lane
 			for i,n in enumerate(Pass):
 				if n >= len(HV[i]):
@@ -58,6 +58,11 @@ def solveDP2(arrivalTime,HV,Copass,P1=1,P2=3):
 				if HV[i][n]:
 					return P2
 		else:
+
+			if HV[GetNonConflictPair(lastPass)][Pass[GetNonConflictPair(lastPass)] - (2 if lastPass == GetNonConflictPair(lastPass)else 1)]:
+				return P2
+				tau > 
+
 			if HV[lastPass][Pass[lastPass] - 1]:
 				return P2
 			for i,n in enumerate(Pass):
@@ -87,15 +92,22 @@ def solveDP2(arrivalTime,HV,Copass,P1=1,P2=3):
 
 	def NonConflictLane(l1,l2):
 		return (l1,l2) in Copass or (l2,l1) in Copass
+	def GetNonConflictPair(l):
+		for pair in Copass:
+			if l == pair[0]:
+				return pair[1]
+			elif l == pair[1]:
+				return pair[0]
 
-	N = [len(a) - 1 for a in arrivalTime]
-	Ns = [list(range(len(a))) for a in arrivalTime]
+	N = [len(a) for a in arrivalTime]
+	Ns = [list(range(len(a) + 1)) for a in arrivalTime]
 	Tau = TimeSlice(arrivalTime)
 	mincost = math.inf
 	Initialize()
-	print(table)
+	#print(table)
 
-	for Pass in product(*Ns):     
+	for Pass in product(*Ns):    
+		#print(Pass) 
 		if sum(list(Pass)) <= 1: # 0,0,0,0 or 0,0,0,1...
 			continue
 		
@@ -111,39 +123,51 @@ def solveDP2(arrivalTime,HV,Copass,P1=1,P2=3):
 				mint = math.inf 
 				
 				#state: Pass_,g_,tau_ -> Pass,g,tau
-
-				for g_ in range(Nlane):
-					if not NonConflictLane(g_,g) and tau != 0:
-						continue
-
-					#passtime = PassTime(Pass_,g_,tau_)
-
-					for tau_ in Tau: 
-						if tuple([*Pass_,g_,tau_]) not in table or table[tuple([*Pass_,g_,tau_])] == math.inf:
+				if tau == 0: # intersection is clear when entering 
+					for g_ in range(Nlane):
+						for tau_ in Tau: 
+							if tuple([*Pass_,g_,tau_]) not in table or table[tuple([*Pass_,g_,tau_])] == math.inf:
+								continue
+							t,t_ = None,table[tuple([*Pass_,g_,tau_])]
+							t = max(t_ + PassTime(Pass_,g_,tau_,t_), arrivalTime[g][Pass_[g]],tau_)
+							if t < mint:
+								mint = t
+				else:
+					for g_ in range(Nlane):
+						if not NonConflictLane(g_,g):
 							continue
-						t,t_ = None,table[tuple([*Pass_,g_,tau_])]
 
-						if tau == t_ and NonConflictLane(g_,g):   # using copass 
-							t = max(tau_ + PassTime(Pass_,g_,tau_) , arrivalTime[g][Pass_[g]],t_) 
-						elif tau == 0:  # not using copass, tau should reset
-							t = t_ + PassTime(Pass_,g_,tau_)
-						else: 
-							continue 
+						for tau_ in Tau: 
+							if tuple([*Pass_,g_,tau_]) not in table or table[tuple([*Pass_,g_,tau_])] == math.inf:
+								continue
+							t,t_ = None,table[tuple([*Pass_,g_,tau_])]
+							if tau == t_ + PassTime(Pass_,g_,tau_,t_)  and NonConflictLane(g_,g):   # using copass 
+								t = max(tau_ , arrivalTime[g][Pass_[g]],t_) 
+							else: 
+								continue 
+							if t < mint:
+								mint = t
 
-						if t < mint:
-							mint = t
+				
 
 
 				table[tuple([*Pass,g,tau])] = mint
 				if mint != math.inf:
-					print(Pass,mint)
+					#print(Pass,mint)
+					pass
 
 				if np.array_equal(Pass,N):
 					if mint < mincost: 
 						mincost = mint
 
-	print(mincost)
+	
+
+	for k,v in table.items():
+		if v is not math.inf:
+			print(k)
+			print("   ",v)
 	return mincost
+	
 
 if __name__ == '__main__':
 	meanInterval = 1
@@ -152,8 +176,8 @@ if __name__ == '__main__':
 	FCFScosts = []
 	MILPcosts = []
 	Ratios = []
-	np.set_printoptions(precision=2)
-	for HVratio in np.arange(0.5,1,0.1):
+	np.set_printoptions(precision=3)
+	for HVratio in np.arange(0.0,1.1,0.1):
 		print("ratio:", HVratio)
 		FCFScost = 0
 		DPcost = 0
@@ -161,12 +185,12 @@ if __name__ == '__main__':
 		successCount = testCount
 		i = 0
 		while i < testCount:
-			arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,3,[(0,1),(2,3)])
-
-			t,cost = solveMILP(arrivalTime,HV,Copass)
+			arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,2,[(0,1),(2,3)])
+			#print("Arrival Time:",arrivalTime)
+			t,cost,runtime = solveMILP(arrivalTime,HV,Copass)
 			MILPcost += cost
-			print('MILP cost:',cost)
-			print(t)
+			print('MILP cost:{},runtime:{}'.format(cost,runtime))
+			#print(t)
 			if cost == -1: #gurobi solve fail
 				continue
 
@@ -174,7 +198,7 @@ if __name__ == '__main__':
 			t,cost = solveFCFS(arrivalTime,HV,Copass)
 			FCFScost += cost
 			print('FCFS cost:',cost)
-			print(t)
+			#print(t)
 
 			cost = solveDP2(arrivalTime,HV,Copass)
 			print("DP cost:",cost)
@@ -185,9 +209,9 @@ if __name__ == '__main__':
 		FCFScost /= testCount
 		print(DPcost)
 		print(FCFScost)
-		DPcosts.append(round(DPcost,2))
-		FCFScosts.append(round(FCFScost,2))
-		Ratios.append(round(DPcost/FCFScost,2))
+		DPcosts.append(round(DPcost,3))
+		FCFScosts.append(round(FCFScost,3))
+		Ratios.append(round(DPcost/FCFScost,3))
 			
 	print(DPcosts)
 	print(FCFScosts)

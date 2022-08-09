@@ -5,7 +5,8 @@ import random
 import matplotlib.pyplot as plt
 import pandas as pd
 from collections.abc import Iterable
-
+RESULTPATH_MILP_FCFS = "./results/MILP_FCFS.csv"
+RESULTPATH_WAITTIME = "./results/MILP_waittime.csv"
 def flatten(l):
     for el in l:
         if isinstance(el, Iterable) and not isinstance(el, (str, bytes)):
@@ -27,7 +28,7 @@ def GenerateTestCase(HVratio,arrivalInterval,laneCount,N,Copass):
             HV[l].append(1 if random.random() < HVratio else 0)
     return arrivalTime,HV,Copass
 
-def solveMILP(arrivalTime,HV,Copass,P1=1,P2=3,TSTART=0,HVSchedulable=False,obj="throughput"):
+def MILP(arrivalTime,HV,Copass,P1=1,P2=3,TSTART=0,HVSchedulable=False,obj="throughput"):
     def printSolution():
         fail = 0
         IntBinVars = [H,Ord,y,r,s,n,q]
@@ -235,7 +236,7 @@ def solveMILP(arrivalTime,HV,Copass,P1=1,P2=3,TSTART=0,HVSchedulable=False,obj="
     runtime = m.Runtime
     return tvars,cost,runtime
 
-def solveFCFS(arrivalTime,HV,Copass,P1=1,P2=3):
+def FCFS(arrivalTime,HV,Copass,P1=1,P2=3):
     Nlane = len(arrivalTime)
     t = [] # time of entering citical zone
     passTime = [] # time required to exit critical zone,P1 or P2
@@ -357,7 +358,7 @@ if __name__ == "__main__":
             #print(HV)
             #print(Copass)
  
-            t,cost,runtime = solveMILP(arrivalTime,HV,Copass,HVSchedulable = False)
+            t,cost,runtime = MILP(arrivalTime,HV,Copass,HVSchedulable = False)
             if cost == -1: #gurobi solve fail
                 continue
             HVWaitTime,CAVWaitTime = checkWaitTime(arrivalTime,t,HV)
@@ -366,14 +367,14 @@ if __name__ == "__main__":
             avgRuntime += runtime
             
             
-            t,cost2,runtime = solveMILP(arrivalTime,HV,Copass,HVSchedulable = True)
+            t,cost2,runtime = MILP(arrivalTime,HV,Copass,HVSchedulable = True)
             if cost2 == -1: #gurobi solve fail
                 continue
 
             MILPcost += cost 
             MILP2cost += cost2 
 
-            t,cost = solveFCFS(arrivalTime,HV,Copass)
+            t,cost = FCFS(arrivalTime,HV,Copass)
             HVWaitTime,CAVWaitTime = checkWaitTime(arrivalTime,t,HV)
             avgHVWaitTime2 += HVWaitTime
             avgCAVWaitTime2 += CAVWaitTime
@@ -391,9 +392,6 @@ if __name__ == "__main__":
         MILPcost /= testCount
         MILP2cost /= testCount
         FCFScost /= testCount
-        print(avgRuntime)
-        print(MILPcost)
-        print(FCFScost)
         HVWaitTimes.append(round(avgHVWaitTime,3))
         CAVWaitTimes.append(round(avgCAVWaitTime,3))
         HVWaitTimes2.append(round(avgHVWaitTime2,3))
@@ -401,41 +399,17 @@ if __name__ == "__main__":
         avgRuntimes.append(round(avgRuntime,3))
         MILPcosts.append(round(MILPcost,3))
         MILP2costs.append(round(MILP2cost,3))
-
         FCFScosts.append(round(FCFScost,3))
         Ratios.append(round(MILPcost/FCFScost,3)) 
-    
-    print(avgHVWaitTime)
-    print(avgCAVWaitTime)
-    print('runtime',avgRuntimes,sum(avgRuntimes)/len(avgRuntimes))
-    print(MILPcosts)
-    print(FCFScosts)
 
-    plt.plot(np.arange(0.0,1.1,0.1),MILPcosts,label = "MILP")
-    plt.plot(np.arange(0.0,1.1,0.1),MILP2costs,label = "MILP(2)")
-    plt.plot(np.arange(0.0,1.1,0.1),FCFScosts,label = "FCFS")
-
-    #plt.plot(np.arange(0.0,1.1,0.1),Ratios,label = "MILP/FCFS")
-    #plt.plot(np.arange(0.1,1.0,0.1),HVWaitTimes,label = "HV Wait Time Optimal")
-    #plt.plot(np.arange(0.1,1.0,0.1),CAVWaitTimes,label = "CAV Wait Time Optimal")
-    #plt.plot(np.arange(0.1,1.0,0.1),HVWaitTimes2,label = "HV Wait Time FCFS")
-    #plt.plot(np.arange(0.1,1.0,0.1),CAVWaitTimes2,label = "CAV Wait Time FCFS")
-    plt.xlabel('HV Ratio')
-    plt.ylabel('Cost(s)')
-    #plt.ylabel('Avg Wait Time(s)')
-    plt.legend()
-    fig = plt.gcf() 
-    #fig.savefig('MILP'+ str(meanInterval) + '.svg')
-    #fig.savefig('WaitTime'+ str(meanInterval) + '.svg')
-    fig.savefig('HVSchedulableWaitTime'+ str(meanInterval) + '.svg')
-    exit()
     df = pd.DataFrame({
         'MILP': MILPcosts,
         'MILP(HV schedulable)': MILP2costs,
         'FCFS': FCFScosts,
+        'runtime' : avgRuntimes,
         },index = np.arange(0,1.1,0.1))
     df.index.name = "HV ratio"
-    df.to_csv("MILP_HVschedulable.csv")
+    df.to_csv(RESULTPATH_MILP_FCFS)
 
     df = pd.DataFrame({
         'MILP-HV': HVWaitTimes,
@@ -444,4 +418,4 @@ if __name__ == "__main__":
         'FCFS-CAV': CAVWaitTimes2,
         },index = np.arange(0,1.1,0.1))
     df.index.name = "HV ratio"
-    df.to_csv("MILP_wait.csv")
+    df.to_csv(RESULTPATH_WAITTIME)

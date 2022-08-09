@@ -11,28 +11,22 @@
 # https://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html
 # SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-or-later
 
-# @file    runner.py
-# @author  Lena Kalleske
-# @author  Daniel Krajzewicz
-# @author  Michael Behrisch
-# @author  Jakob Erdmann
-# @date    2009-03-26
-
 from __future__ import absolute_import
 from __future__ import print_function
-
-from MILPSubproblem import solveDC
-import matplotlib.pyplot as plt
-import numpy as np
 import os
 import sys
+import matplotlib.pyplot as plt
+import numpy as np
 import optparse
 import random
 import math
 import copy
 import pandas as pd
-# we need to import python modules from the $SUMO_HOME/tools directory
 
+sys.path.append('../../../')
+from CAV_as_scheduler.Gurobi.MILPBased import MILPBased
+
+# we need to import python modules from the $SUMO_HOME/tools directory
 if 'SUMO_HOME' in os.environ:
     tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
     sys.path.append(tools)
@@ -41,18 +35,15 @@ else:
 
 from sumolib import checkBinary  # noqa
 import traci  # noqa
-STEPLENGTH = 1#time for a step
 
-def generate_routefile(HVratio,meanInterval):
-    #random.seed(19)  # make tests reproducible
-    N = 100  # number of time steps
+def generate_routefile(HVratio,MEANINTERVAL):
     # demand per second from different directions
-    pWE = 1/meanInterval  * STEPLENGTH
-    pEW = 1/meanInterval * STEPLENGTH
-    pNS = 1/meanInterval * STEPLENGTH
-    pSN = 1/meanInterval * STEPLENGTH
+    pWE = 1/MEANINTERVAL * STEPLENGTH
+    pEW = 1/MEANINTERVAL * STEPLENGTH
+    pNS = 1/MEANINTERVAL * STEPLENGTH
+    pSN = 1/MEANINTERVAL * STEPLENGTH
 
-    with open("data/cross.rou.xml", "w") as routes:
+    with open("sumocfg/cross.rou.xml", "w") as routes:
         print("""<routes>
         <vType id="CAV" accel="0.8" decel="4.5" sigma="0.5" length="5" minGap="2.5" maxSpeed="16.67" \
 guiShape="passenger"/>
@@ -64,7 +55,7 @@ guiShape="passenger"/>
         <route id="up" edges="53o 3i 4o 54i" />
         <route id="down" edges="54o 4i 3o 53i" />""", file=routes)
         vehNr = 0
-        for i in range(N):
+        for i in range(TIMESTEPS):
             if random.uniform(0, 1) < pWE:
                 if random.uniform(0,1) < HVratio:
                     print('    <vehicle id="right_%i" type="HV"  route="right" depart="%i" />' % (
@@ -108,22 +99,13 @@ guiShape="passenger"/>
 
         print("</routes>", file=routes)
 
-# The program looks like this
-#    <tlLogic id="0" type="static" programID="0" offset="0">
-# the locations of the tls are      NESW
-#        <phase duration="31" state="GrGr"/>
-#        <phase duration="6"  state="yryr"/>
-#        <phase duration="31" state="rGrG"/>
-#        <phase duration="6"  state="ryry"/>
-#    </tlLogic>
-
 class IntersectionManager():
-    def __init__(self,incomingLanes,outboundLanes,sensorRange,interval,schedulePower,method):
-        self.sensorRange = sensorRange
+    def __init__(self,incomingLanes,outboundLanes,sensorRange,interval,schedulePower,method=MILPBased):
+        self.sensorRange = sensorRange 
         self.scheduleInterval = interval
         self.expectedArrivalTime = {}
-        self.vInRange = {}  #stores by each lane 
-        self.position =  (510,510)
+        self.vInRange = {}  #vehicles within sensor range, stores by each lane 
+        self.position =  (510,510) # position of intersection manager 
         self.incomingLanes = incomingLanes
         self.outboundLanes = outboundLanes 
         self.scheduledPasstime = None
@@ -133,14 +115,15 @@ class IntersectionManager():
         self.intersectionRadius = 5
         self.blockList = []
         self.stopRadius = 15
-        self.P1 = 1
-        self.P2 = 3
+        self.G1 = G1
+        self.G2 = G2
         self.stoppedVehicle = []
-        self.existsHV = None
+        self.existsHV = None # if the head of any lane exists HV
         self.allowedPassTime = 0
         self.schedulePower=schedulePower
-        self.method=method
+        self.method=method 
 
+    # vehicle's distance to IM
     def vDistance(self,v):
         pos = traci.vehicle.getPosition(v)
         x,y = pos[0] - self.position[0], pos[1] - self.position[1]
@@ -189,10 +172,9 @@ class IntersectionManager():
                     break
                 arrival.append(self.expectedArrivalTime[v])
                 hv.append(1 if traci.vehicle.getTypeID(v) == "HV" else 0) 
-
             arrivalTime.append(arrival)
             HV.append(hv)
-        passtime,_,_ = self.method(arrivalTime,HV,[(0,1),(2,3)],self.P1,self.P2)
+        passtime,_,_ = self.method(arrivalTime,HV,[(0,1),(2,3)],self.G1,self.G2)
         
         if passtime is not None:
             passingOrder = {}
@@ -231,7 +213,7 @@ class IntersectionManager():
             if currentTime >= self.allowedPassTime:
                 if len(self.passingOrder) == 0 or (traci.vehicle.getTypeID(v) == "HV") or (v in self.passingOrder and self.passingOrder[v] == 0):
                     traci.vehicle.setSpeed(v,-1)
-                    self.allowedPassTime = max(self.allowedPassTime,currentTime + (self.P2 if self.existsHV else self.P1))
+                    self.allowedPassTime = max(self.allowedPassTime,currentTime + (self.G2 if self.existsHV else self.G1))
                     break
         
         for v in self.stoppedVehicle:
@@ -254,7 +236,7 @@ class IntersectionManager():
                         traci.vehicle.setSpeed(head,0)
                         #traci.vehicle.setColor(head,(255,0,0,1))
                         self.blockList.append(head)
-                        print(self.blockList)
+                        #print(self.blockList)
                     elif head in self.blockList:
                         self.blockList.remove(head)
                         traci.vehicle.setSpeed(head,-1) # unset
@@ -288,9 +270,7 @@ class Analysis():
                     self.waitTime[v] = traci.vehicle.getAccumulatedWaitingTime(v)
                     self.passedVehicle.append(v)
                     self.hv[v] = True if  traci.vehicle.getTypeID(v) == "HV" else False
-                    #print(v,self.waitTime[v])
     def getAvgWaitTime(self):
-        #print(self.waitTime)
         totalWTime = 0
         cavWaitTime = 0
         hvWaitTime = 0
@@ -310,18 +290,17 @@ class Analysis():
         return totalWTime,cavWaitTime,hvWaitTime 
 
     def getAvgTotalPassTime(self,IM):
-        #print(self.waitTime)
         totalPTime = 0
         for v in IM.passTimes:
             totalPTime += IM.passTimes[v] - IM.enterTimes[v]
         return 0 if len(IM.passTimes) == 0 else totalPTime/len(IM.passTimes)
 
 
-def run(schedulePower,schedule=True,method=solveDC):
+def run(schedulePower,schedule=True,method=MILPBased):
     """execute the TraCI control loop"""
     step = 0
-    sensorRange = 500
-    scheduleInterval = 1 # seconds
+    sensorRange = 500  #
+    scheduleInterval = 1 # IM schedule interval(second)
     lastScheduleTime = -math.inf
     incomingLanes = ["1i","2i","3i","4i"]
     outboundLanes = ["2o","1o","4o","3o"]
@@ -330,7 +309,6 @@ def run(schedulePower,schedule=True,method=solveDC):
 
     while traci.simulation.getMinExpectedNumber() > 0:
         traci.simulationStep()
-        #print(traci.edge.getIDList())
         IM.updatePassedVehicle()
         IM.updateVInRange()
         IM.updateExceptedArrivalTime()
@@ -347,7 +325,6 @@ def run(schedulePower,schedule=True,method=solveDC):
 
     traci.close()
     avgWaitTime,cavWaitTime,hvWaitTime = analysis.getAvgWaitTime()
-    print(avgWaitTime)
     return avgWaitTime,cavWaitTime,hvWaitTime
 
 
@@ -359,10 +336,16 @@ def get_options():
     return options
 
 
-# this is the main entry point of this script
 if __name__ == "__main__":
+    RESULTPATH = "./results/SUMO_nosignal.csv"
+    STEPLENGTH = 1 #time for a step
+    G1 = 1
+    G2 = 3
+    MEANINTERVAL = 10 # average interval of incoming vehicle from each lane 
+    TESTCOUNT    = 2 
+    TIMESTEPS = 100 # number of time steps
+    
     options = get_options()
-
     # this script has been called from the command line. It will start sumo as a
     # server, then connect and run
     if options.nogui:
@@ -371,12 +354,9 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
     #sumoBinary = "/mnt/c/Program Files (x86)/Eclipse/Sumo/bin/sumo-gui.exe"
     sumoBinary = "/mnt/c/Program Files (x86)/Eclipse/Sumo/bin/sumo.exe"
-    meanInterval = 20
-    #schedulePower 
     scheduleWait = []
     unscheduleWait =  []
-    schedulePowers = [3]
-    testCounts = 20
+    schedulePowers = [12] # How much vehicles can the IM schedule
     for schedulePower in schedulePowers:
         scheduleTotal = []
         scheduleCAV = []
@@ -388,60 +368,39 @@ if __name__ == "__main__":
             avgTotal = 0
             avgCAV = 0
             avgHV = 0
-            avgTotal2 = 0
-            avgCAV2 = 0
-            avgHV2 = 0
-            for test in range(testCounts):
-                generate_routefile(HVratio,meanInterval)
-                traci.start([sumoBinary, "-c", "./data/cross.sumocfg","--tripinfo-output", "tripinfo.xml"])
-                totalWait,cavWait,hvWait = run(schedulePower,schedule = True)
-                avgTotal += totalWait
+            avgTotal_unscheduled = 0
+            avgCAV_unscheduled = 0
+            avgHV_unscheduled = 0
+            for test in range(TESTCOUNT	):
+                generate_routefile(HVratio,MEANINTERVAL)
+                traci.start([sumoBinary, "-c", "./sumocfg/cross.sumocfg","--tripinfo-output", "tripinfo.xml"])
+                Wait,cavWait,hvWait = run(schedulePower,schedule = True)
+                avgTotal += Wait
                 avgCAV +=  cavWait
                 avgHV += hvWait
                 
-                traci.start([sumoBinary, "-c", "./data/cross.sumocfg","--tripinfo-output", "tripinfo.xml"])
-                totalWait,cavWait,hvWait = run(schedulePower,schedule = False)
-                avgTotal2 += totalWait
-                avgCAV2 +=  cavWait
-                avgHV2 += hvWait
+                traci.start([sumoBinary, "-c", "./sumocfg/cross.sumocfg","--tripinfo-output", "tripinfo.xml"])
+                Wait,cavWait,hvWait = run(schedulePower,schedule = False)
+                avgTotal_unscheduled += Wait
+                avgCAV_unscheduled +=  cavWait
+                avgHV_unscheduled += hvWait
 
-            scheduleTotal.append(avgTotal/testCounts)
-            scheduleCAV.append(avgCAV/testCounts)
-            scheduleHV.append(avgHV/testCounts)
+            scheduleTotal.append(avgTotal/TESTCOUNT	)
+            scheduleCAV.append(avgCAV/TESTCOUNT	)
+            scheduleHV.append(avgHV/TESTCOUNT	)
 
-            unScheduleTotal.append(avgTotal2/testCounts)
-            unScheduleCAV.append(avgCAV2/testCounts)
-            unScheduleHV.append(avgHV2/testCounts)
-        
-        plt.figure(1)
-        plt.plot(np.arange(0.0,1.1,0.1),scheduleTotal,label = "Scheduled average wait time")
-        plt.plot(np.arange(0.0,1.1,0.1),unScheduleTotal,label = "Unscheduled average wait time")
-        plt.figure(2)
-        plt.plot(np.arange(0.0,1.1,0.1),scheduleCAV,label = "Scheduled CAV wait time")
-        plt.plot(np.arange(0.0,1.1,0.1),scheduleHV,label = "Scheduled HV wait time")
-        plt.plot(np.arange(0.0,1.1,0.1),unScheduleCAV,label = "Unscheduled CAV wait time")
-        plt.plot(np.arange(0.0,1.1,0.1),unScheduleHV,label = "Unscheduled HV wait time")
-
-   
-    plt.figure(1)
-    plt.xlabel('HV Ratio')
-    plt.ylabel('Cost(s)')
-    plt.legend()
-    fig = plt.gcf() 
-    fig.savefig('SumoavgWaitTime'+ str(meanInterval) + '.svg')
-
-    plt.figure(2)
-    plt.xlabel('HV Ratio')
-    plt.ylabel('Cost(s)')
-    plt.legend()
-    fig = plt.gcf() 
-    fig.savefig('SumoWaitTimeHVvsCAV'+ str(meanInterval) + '.svg')
+            unScheduleTotal.append(avgTotal_unscheduled/TESTCOUNT	)
+            unScheduleCAV.append(avgCAV_unscheduled/TESTCOUNT	)
+            unScheduleHV.append(avgHV_unscheduled/TESTCOUNT	)
 
     df = pd.DataFrame({
-        'Scheduled': scheduleTotal,
-        'Unscheduled': unScheduleTotal,
-        'Cost ratio': [ round(max(scheduleTotal[i],0.01)/ max(unScheduleTotal[i],0.01),3) for i in range(len(scheduleTotal))]
+            'Scheduled': scheduleTotal,
+            'Unscheduled': unScheduleTotal,
+            'ScheduledCAV': scheduleCAV,
+            'ScheduledHV': scheduleHV, 
+            'UnscheduledCAV': unScheduleCAV,
+            'UnscheduledHV': unScheduleHV,
         },index = np.arange(0,1.1,0.1))
     df.index.name = "HV ratio"
-    df.to_csv("SUMO_nosignal.csv")
+    df.to_csv(RESULTPATH)
 

@@ -1,8 +1,8 @@
-from copass import *
+from CAV_as_scheduler.Gurobi.MILP import *
 import pandas as pd
 import pickle
 
-def solveDC(arrivalTime,HV,Copass,P1=1,P2=3,SUBCASESIZE=12):
+def MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE):
 	head = np.zeros(len(arrivalTime),dtype = 'int')
 	N = []
 	t = []
@@ -10,10 +10,8 @@ def solveDC(arrivalTime,HV,Copass,P1=1,P2=3,SUBCASESIZE=12):
 		N.append(len(lane))
 		t.append([])
 
-
 	N = np.asarray(N)
-	#print(N,head)
-	currentTime = -P2
+	currentTime = -G2
 	runtime = 0
 	
 	while not np.array_equal(head,N):
@@ -30,7 +28,7 @@ def solveDC(arrivalTime,HV,Copass,P1=1,P2=3,SUBCASESIZE=12):
 			 		break 
 
 
-		currentTime += P2
+		currentTime += G2
 		subCaseA = []
 		subCaseHV = []
 		for i,a in enumerate(arrivalTime):
@@ -40,7 +38,7 @@ def solveDC(arrivalTime,HV,Copass,P1=1,P2=3,SUBCASESIZE=12):
 
 		#print(subCaseA)
 		#print(subCaseHV)
-		subt,cost,caseRuntime = solveMILP(subCaseA,subCaseHV,Copass,P1=P1,P2=P2,TSTART=currentTime,obj="throughput")
+		subt,cost,caseRuntime = MILP(subCaseA,subCaseHV,nonConflictingTrajectory,G1=G1,G2=G2,TSTART=currentTime,obj="throughput")
 		if cost == -1:
 			return  None,-1,-1
 		runtime += caseRuntime
@@ -54,28 +52,32 @@ def solveDC(arrivalTime,HV,Copass,P1=1,P2=3,SUBCASESIZE=12):
 
 
 if __name__ == '__main__':
-	meanInterval = 2
-	
-	testCount = 10
+	MEANINTERVAL = 2
+	TESTCOUNT = 10
+	RESULTPATH_RATIO = "./results/MILPB_ratio.csv"
+	RESULTPATH_MILPB_MILP_FCFS = "./results/MILPB_FCFS_MILP.csv"
+	G1 = 1
+	G2 = 3
 	MILPcosts = []
 	FCFScosts = []
 	Ratios1 = []
 
+	#The MILP(case size = 12) for our MILPB method(subcase size = 12) to compare improvement ratio to 
 	for HVratio in np.arange(0,1.1,0.1):
 		print("ratio:", HVratio)
 		FCFScost = 0
 		MILPcost = 0
-		successCount = testCount
+		successCount = TESTCOUNT	
 		i = 0
-		while i < testCount:
-			arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,3,[(0,1),(2,3)])
-			t,cost,runtime = solveMILP(arrivalTime,HV,Copass,obj='throughput')
+		while i < TESTCOUNT	:
+			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,4,3,[(0,1),(2,3)])
+			t,cost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectory,obj='throughput')
 			if cost == -1: #gurobi solve fail
 				continue
 			print("arrival:",arrivalTime)
 			print('MILPcost:',cost,t)
 			MILPcost += cost 
-			t,cost = solveFCFS(arrivalTime,HV,Copass)
+			t,cost = FCFS(arrivalTime,HV,nonConflictingTrajectory)
 			print('FCFScost:',cost,t)
 			FCFScost += cost
 			np.set_printoptions(precision=2)
@@ -83,32 +85,15 @@ if __name__ == '__main__':
 
 			i += 1
 
-		MILPcost /= testCount
-		FCFScost /= testCount
-		print('MILPcost:',MILPcost)
-		print('FCFScost:',FCFScost)
+		MILPcost /= TESTCOUNT	
+		FCFScost /= TESTCOUNT	
 		MILPcosts.append(round(MILPcost,3))
 		FCFScosts.append(round(FCFScost,3))
 		Ratios1.append(round(MILPcost/FCFScost,3))
-			
-	print(MILPcosts)
-	print(FCFScosts)
+	
 
+	subcasesizes = [4,12,20]
 
-	#plt.plot(np.arange(0.0,1.1,0.1),MILPcosts,label = "MILP")
-	#plt.plot(np.arange(0.0,1.1,0.1),FCFScosts,label = "FCFS")
-	#plt.xlabel('HVRatio')
-	#plt.ylabel('Cost(s)')
-	#plt.legend()
-	#fig = plt.gcf() 
-	#fig.savefig('MILPSUBvsFCFS'+ str(meanInterval) + '.svg')
-	#exit()
-
-	plt.plot(np.arange(0.0,1.1,0.1),Ratios1,label = "N=4")
-
-	subcasesizes = [12]
-
-	testCount = 10	
 	MILPsubcosts = [[] for i in range(len(subcasesizes))]
 	MILPcosts = []
 	FCFScosts = []
@@ -121,12 +106,12 @@ if __name__ == '__main__':
 		MILPsubcost = [0] * len(subcasesizes)
 		avgRuntime = [0] * len(subcasesizes)
 		
-		successCount = testCount
+		successCount = TESTCOUNT	
 		n = 0
-		while n < testCount:
-			arrivalTime,HV,Copass = GenerateTestCase(HVratio,meanInterval,4,9,[(0,1),(2,3)])
-			milpt,milpcost,runtime = solveMILP(arrivalTime,HV,Copass,obj="throughput")
-			t,fcfscost = solveFCFS(arrivalTime,HV,Copass)
+		while n < TESTCOUNT	:
+			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,4,9,[(0,1),(2,3)])
+			milpt,milpcost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectory,obj="throughput")
+			t,fcfscost = FCFS(arrivalTime,HV,nonConflictingTrajectory)
 			if milpcost == -1: #gurobi solve fail
 				continue
 
@@ -135,7 +120,7 @@ if __name__ == '__main__':
 			cost = [0] * len(subcasesizes)
 			runtime = [0] * len(subcasesizes)
 			for i,subcasesize in enumerate(subcasesizes):
-				t[i],cost[i],runtime[i] = solveDC(arrivalTime,HV,Copass,SUBCASESIZE=subcasesize)
+				t[i],cost[i],runtime[i] = MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE=subcasesize)
 				if cost[i] == -1: #gurobi solve fail
 					solveFail = True
 					break
@@ -153,50 +138,39 @@ if __name__ == '__main__':
 			FCFScost += fcfscost
 			MILPcost += milpcost
 			print("milp_t:",milpt)
-			print("msub_t:",t[0]) 	
+			print("milpb_t:",t[0]) 	
 			#np.set_printoptions(precision=3)
 			#print('FCFS cost:',cost)
 			#print(t)
 			n += 1
 
-		MILPcost /= testCount
-		FCFScost /= testCount
+		MILPcost /= TESTCOUNT	
+		FCFScost /= TESTCOUNT	
 		print("FCFS,MILP: ",FCFScost,MILPcost)
 
 		FCFScosts.append(round(FCFScost,3))
 		MILPcosts.append(round(MILPcost,3))
 		for i,subcasesize in enumerate(subcasesizes):
-			avgRuntime[i] /= testCount
-			MILPsubcost[i] /= testCount
-			print(MILPsubcost[i])
-			print(MILPsubcost[i]/FCFScost)
+			avgRuntime[i] /= TESTCOUNT
+			MILPsubcost[i] /= TESTCOUNT
 			avgRuntimes[i].append(round(avgRuntime[i],3))
 			MILPsubcosts[i].append(round(MILPsubcost[i],3))
-
 			Ratios2[i].append(round(MILPsubcost[i]/FCFScost,3))
-			print('runtime:',avgRuntimes[i],sum(avgRuntimes[i])/len(avgRuntimes[i]))
 
-	#plt.plot(np.arange(0.0,1.1,0.1),Ratios2,label = "N=10")
-	#plt.xlabel('HVRatio')
-	#plt.ylabel('MILP/FCFS')
-	#plt.legend()
-	#fig = plt.gcf() 
-	#fig.savefig('MILPFCFSRatio'+ str(meanInterval) + '.svg')
-
-	#print('runtime:', avgRuntimes)
-	#df = pd.DataFrame({
-    #    'MILP as Subproblem1': MILPsubcosts[0],
-    #    'MILP as Subproblem2': MILPsubcosts[1],
-        #'MILP as Subproblem3': MILPsubcosts[2],
-    #    'MILP': MILPcosts,
-    #    'FCFS': FCFScosts,
-    #    },index = np.arange(0,1.1,0.1))
-	#df.index.name = "HV ratio"
-	#df.to_csv("MILPSUB_vsFCFS_vsMILP.csv")
+	print('runtime:', avgRuntimes)
+	df = pd.DataFrame({
+        'MILPB1': MILPsubcosts[0],
+        'MILPB2': MILPsubcosts[1],
+        'MILPB3': MILPsubcosts[2],
+        'MILP': MILPcosts,
+        'FCFS': FCFScosts,
+        },index = np.arange(0,1.1,0.1))
+	df.index.name = "HV ratio"
+	df.to_csv(RESULTPATH_MILPB_MILP_FCFS)
 
 	df = pd.DataFrame({
         'N=12 (No subcasing)': Ratios1,
         'N=36': Ratios2[0],
         },index = np.arange(0,1.1,0.1))
 	df.index.name = "HV ratio"
-	df.to_csv("MILPSUB_ratiostest.csv")
+	df.to_csv(RESULTPATH_RATIO)
