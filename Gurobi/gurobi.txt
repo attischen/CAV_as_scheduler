@@ -1,0 +1,3 @@
+Follow the guides below to get license, the documentation changed so might need to do some further survey.
+https://www.gurobi.com/documentation/9.5/quickstart_linux/retrieving_a_free_academic.html#subsection:academiclicense
+https://www.gurobi.com/documentation/9.5/quickstart_linux/index.html
