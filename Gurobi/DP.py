@@ -4,7 +4,7 @@ import csv
 import pandas as pd
 RESULTPATH = "./results/DP.csv"
 
-def DP(arrivalTime,HV,Copass,P1=1,P2=3):
+def DP(arrivalTime,HV,nonConflictingTrajectories,G1=1,G2=3):
 	zeros =  np.zeros(len(arrivalTime),dtype = 'int')
 	table = {} # DP table store the solved pass time of each vehicle
 	def MinPass(Pass):
@@ -34,8 +34,8 @@ def DP(arrivalTime,HV,Copass,P1=1,P2=3):
 			if n >= len(HV[i]):
 				continue
 			if HV[i][n]:
-				return P2
-		return P1
+				return G2
+		return G1
 
 	# if the vehicle from lane i can pass next based on the state of lanes (No passing before a HV which arrived earlier)
 	def Legal(Pass,i):
@@ -72,11 +72,11 @@ if __name__ == '__main__':
 		successCount = TESTCOUNT
 		i = 0
 		while i < TESTCOUNT:
-			arrivalTime,HV,Copass = GenerateTestCase(HVratio,MEANINTERVAL,4,10,[])
+			arrivalTime,HV,nonConflictingTrajectories = GenerateTestCase(HVratio,MEANINTERVAL,4,10,[])
 
-			cost,runtime = DP(arrivalTime,HV,Copass)
+			cost,runtime = DP(arrivalTime,HV,nonConflictingTrajectories)
 			DPcost += cost 
-			t,cost = FCFS(arrivalTime,HV,Copass)
+			t,cost = FCFS(arrivalTime,HV,nonConflictingTrajectories)
 			FCFScost += cost
 			avgRuntime += runtime
 			np.set_printoptions(precision=3)

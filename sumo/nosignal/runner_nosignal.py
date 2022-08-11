@@ -23,6 +23,7 @@ import math
 import copy
 import pandas as pd
 
+
 sys.path.append('../../../')
 from CAV_as_scheduler.Gurobi.MILPBased import MILPBased
 
@@ -33,8 +34,9 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.exit("please declare environment variable 'SUMO_HOME'")
 
-from sumolib import checkBinary  # noqa
-import traci  # noqa
+from sumolib import checkBinary 
+import traci   
+
 
 def generate_routefile(HVratio,MEANINTERVAL):
     # demand per second from different directions
@@ -111,9 +113,7 @@ class IntersectionManager():
         self.scheduledPasstime = None
         self.passingOrder = {}
         self.nonConflictingLanes = [(0,1),(1,0),(2,3),(3,2)]
-        self.blockDistance = 10
-        self.intersectionRadius = 5
-        self.blockList = []
+        self.intersectionRadius = 5 
         self.stopRadius = 15
         self.G1 = G1
         self.G2 = G2
@@ -140,15 +140,6 @@ class IntersectionManager():
             vInRange[lane] = vInLane[::-1] #head vehicle at 0 
         self.vInRange = vInRange 
 
-    def updatePassedVehicle(self):
-        for lane in self.outboundLanes:
-            vList = traci.edge.getLastStepVehicleIDs(lane)
-            for v in vList:
-                if v in self.blockList:
-                    self.blockList.remove(v)
-                    traci.vehicle.setSpeed(v,-1) # unset
-                    traci.vehicle.setColor(v,(0,0,255,1))
-
     def updateExceptedArrivalTime(self):
         expectedArrivalTime = {}
         for lane in self.vInRange:
@@ -174,7 +165,7 @@ class IntersectionManager():
                 hv.append(1 if traci.vehicle.getTypeID(v) == "HV" else 0) 
             arrivalTime.append(arrival)
             HV.append(hv)
-        passtime,_,_ = self.method(arrivalTime,HV,[(0,1),(2,3)],self.G1,self.G2)
+        passtime,_,_ = self.method(arrivalTime,HV,[(0,1),(2,3)],self.G1,self.G2,self.schedulePower)
         
         if passtime is not None:
             passingOrder = {}
@@ -185,9 +176,8 @@ class IntersectionManager():
                         break
                     passingOrder[v] = sum([1 if t <  passtime[l][i] else 0 for lane in passtime for t in lane])
             self.passingOrder = passingOrder
-        #print(self.passingOrder)
 
-    def stopBeforePass(self):         
+    def stopBeforePass(self): #vehicles stop before entering the intersection, duration is equal to G         
         heads = []
         for lane in self.vInRange:
             vList = self.vInRange[lane]
@@ -219,41 +209,6 @@ class IntersectionManager():
         for v in self.stoppedVehicle:
             if self.vDistance(v) >= self.stopRadius:
                 self.stoppedVehicle.remove(v)
-
-    def executeBlocking(self):
-        if self.passingOrder == None:
-            return
-        heads = []
-        for lane in self.vInRange:
-            vList = self.vInRange[lane]
-            heads.append(vList[0] if len(vList) > 0 else None)
-
-        for l,head in enumerate(heads):
-            if head != None:
-                if traci.vehicle.getTypeID(head) == "CAV":
-                    if head not in self.blockList and self.decideBlock(l,head,heads):
-                        #print("block " + head)
-                        traci.vehicle.setSpeed(head,0)
-                        #traci.vehicle.setColor(head,(255,0,0,1))
-                        self.blockList.append(head)
-                        #print(self.blockList)
-                    elif head in self.blockList:
-                        self.blockList.remove(head)
-                        traci.vehicle.setSpeed(head,-1) # unset
-                        #traci.vehicle.setColor(head,(0,0,255,1))
-
-
-    def decideBlock(self,blockLane,blockingVehicle,heads):
-        #heads is a dict
-        for l,head in enumerate(heads):
-            if blockLane == l or head not in self.passingOrder or blockingVehicle not in self.passingOrder:
-                continue
-            if self.passingOrder[head] == 0 and (l,blockLane) not in self.nonConflictingLanes:
-                if self.vDistance(blockingVehicle) < self.blockDistance and self.vDistance(blockingVehicle) > self.intersectionRadius:
-                    return True
-        return False
-
-
 
 
 class Analysis():
@@ -309,14 +264,12 @@ def run(schedulePower,schedule=True,method=MILPBased):
 
     while traci.simulation.getMinExpectedNumber() > 0:
         traci.simulationStep()
-        IM.updatePassedVehicle()
         IM.updateVInRange()
         IM.updateExceptedArrivalTime()
         if schedule and step * STEPLENGTH - lastScheduleTime >= scheduleInterval:
             lastScheduleTime = step * STEPLENGTH
             IM.schedule()
         IM.stopBeforePass()
-        #IM.executeBlocking()
         IM.startPass(step * STEPLENGTH,schedule=schedule)
 
         analysis.updateWaitTime()
@@ -337,13 +290,13 @@ def get_options():
 
 
 if __name__ == "__main__":
-    RESULTPATH = "./results/SUMO_nosignal.csv"
+    RESULTPATH = "./results/SUMO_nosignaltest.csv"
     STEPLENGTH = 1 #time for a step
     G1 = 1
     G2 = 3
-    MEANINTERVAL = 10 # average interval of incoming vehicle from each lane 
+    MEANINTERVAL = 20 # average interval of incoming vehicle from each lane 
     TESTCOUNT    = 2 
-    TIMESTEPS = 100 # number of time steps
+    TIMESTEPS = 50 # number of time steps
     
     options = get_options()
     # this script has been called from the command line. It will start sumo as a

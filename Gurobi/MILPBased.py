@@ -1,6 +1,10 @@
-from CAV_as_scheduler.Gurobi.MILP import *
+import sys
 import pandas as pd
 import pickle
+
+sys.path.append('../../')
+from CAV_as_scheduler.Gurobi.MILP import *
+
 
 def MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE):
 	head = np.zeros(len(arrivalTime),dtype = 'int')
@@ -20,7 +24,6 @@ def MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE):
 		while  n < SUBCASESIZE and not np.array_equal(head+subcase,N):
 			headVs = [lane[head[i]+subcase[i]] if head[i]+subcase[i] < len(lane) else math.inf for i,lane in enumerate(arrivalTime)]
 			firstv = min(headVs)
-			#print(headVs)
 			for i,a in enumerate(headVs):
 			 	if a == firstv:
 			 		subcase[i] += 1
@@ -36,24 +39,17 @@ def MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE):
 			subCaseHV.append(HV[i][head[i]:head[i] + subcase[i]])
 			head[i] = head[i] + subcase[i] if head[i] + subcase[i] <= N[i] else N[i]
 
-		#print(subCaseA)
-		#print(subCaseHV)
 		subt,cost,caseRuntime = MILP(subCaseA,subCaseHV,nonConflictingTrajectory,G1=G1,G2=G2,TSTART=currentTime,obj="throughput")
-		if cost == -1:
-			return  None,-1,-1
 		runtime += caseRuntime
 		currentTime = max(max(lane) if len(lane) > 0 else 0  for lane in subt)
 		for i,lanet in enumerate(subt):
 			t[i].extend(lanet) 
-
-	#print("MILSUB_t: ", t)
-	#print(currentTime)
 	return t, currentTime , runtime
 
 
 if __name__ == '__main__':
 	MEANINTERVAL = 2
-	TESTCOUNT = 10
+	TESTCOUNT = 1
 	RESULTPATH_RATIO = "./results/MILPB_ratio.csv"
 	RESULTPATH_MILPB_MILP_FCFS = "./results/MILPB_FCFS_MILP.csv"
 	G1 = 1
@@ -72,20 +68,13 @@ if __name__ == '__main__':
 		while i < TESTCOUNT	:
 			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,4,3,[(0,1),(2,3)])
 			t,cost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectory,obj='throughput')
-			if cost == -1: #gurobi solve fail
-				continue
-			print("arrival:",arrivalTime)
-			print('MILPcost:',cost,t)
 			MILPcost += cost 
 			t,cost = FCFS(arrivalTime,HV,nonConflictingTrajectory)
-			print('FCFScost:',cost,t)
 			FCFScost += cost
-			np.set_printoptions(precision=2)
-			#print(t)
 
 			i += 1
 
-		MILPcost /= TESTCOUNT	
+			MILPcost /= TESTCOUNT	
 		FCFScost /= TESTCOUNT	
 		MILPcosts.append(round(MILPcost,3))
 		FCFScosts.append(round(FCFScost,3))
@@ -121,12 +110,7 @@ if __name__ == '__main__':
 			runtime = [0] * len(subcasesizes)
 			for i,subcasesize in enumerate(subcasesizes):
 				t[i],cost[i],runtime[i] = MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE=subcasesize)
-				if cost[i] == -1: #gurobi solve fail
-					solveFail = True
-					break
-				print("MILPsub cost:",cost[i])
-			if solveFail:
-				continue
+
 			with open("./testcase/MILPSubproblem_" + str(i),"wb") as f:
 				pickle.dump(arrivalTime,f)
 				pickle.dump(HV,f)
@@ -136,12 +120,7 @@ if __name__ == '__main__':
 				avgRuntime[i] += runtime[i]
 				MILPsubcost[i] += cost[i] 			
 			FCFScost += fcfscost
-			MILPcost += milpcost
-			print("milp_t:",milpt)
-			print("milpb_t:",t[0]) 	
-			#np.set_printoptions(precision=3)
-			#print('FCFS cost:',cost)
-			#print(t)
+			MILPcost += milpcost 	
 			n += 1
 
 		MILPcost /= TESTCOUNT	
