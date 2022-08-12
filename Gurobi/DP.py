@@ -61,6 +61,8 @@ def DP(arrivalTime,HV,nonConflictingTrajectories,G1=1,G2=3):
 if __name__ == '__main__':
 	MEANINTERVAL = 2
 	TESTCOUNT = 1
+	LANECOUNT = 4 
+	VEACHLANE = 10
 	DPcosts = []
 	FCFScosts = []
 	avgRuntimes = []
@@ -72,7 +74,7 @@ if __name__ == '__main__':
 		successCount = TESTCOUNT
 		i = 0
 		while i < TESTCOUNT:
-			arrivalTime,HV,nonConflictingTrajectories = GenerateTestCase(HVratio,MEANINTERVAL,4,10,[])
+			arrivalTime,HV,nonConflictingTrajectories = GenerateTestCase(HVratio,MEANINTERVAL,LANECOUNT,VEACHLANE,[])
 
 			cost,runtime = DP(arrivalTime,HV,nonConflictingTrajectories)
 			DPcost += cost 

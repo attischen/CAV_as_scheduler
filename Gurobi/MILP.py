@@ -272,6 +272,8 @@ def checkWaitTime(arrivalTime,passTime,HV):
 if __name__ == "__main__":
     meanInterval = 2
     testCount = 10
+    LANECOUNT = 4 
+    VEACHLANE = 3
     MILPcosts = []
     MILG2costs = []
 
@@ -296,7 +298,7 @@ if __name__ == "__main__":
         successCount = testCount
         i = 0
         while i < testCount:
-            arrivalTime,HV,nonConflictingTrajectories = GenerateTestCase(HVratio,meanInterval,4,3,[(0,1),(2,3)])
+            arrivalTime,HV,nonConflictingTrajectories = GenerateTestCase(HVratio,meanInterval,LANECOUNT,VEACHLANE,[(0,1),(2,3)])
  
             t,cost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectories,HVSchedulable = False)
             HVWaitTime,CAVWaitTime = checkWaitTime(arrivalTime,t,HV)

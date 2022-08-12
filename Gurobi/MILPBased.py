@@ -50,6 +50,8 @@ def MILPBased(arrivalTime,HV,nonConflictingTrajectory,G1,G2,SUBCASESIZE):
 if __name__ == '__main__':
 	MEANINTERVAL = 2
 	TESTCOUNT = 1
+	LANECOUNT = 4 
+	VEACHLANE = 3
 	RESULTPATH_RATIO = "./results/MILPB_ratio.csv"
 	RESULTPATH_MILPB_MILP_FCFS = "./results/MILPB_FCFS_MILP.csv"
 	G1 = 1
@@ -66,7 +68,7 @@ if __name__ == '__main__':
 		successCount = TESTCOUNT	
 		i = 0
 		while i < TESTCOUNT	:
-			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,4,3,[(0,1),(2,3)])
+			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,LANECOUNT,VEACHLANE,[(0,1),(2,3)])
 			t,cost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectory,obj='throughput')
 			MILPcost += cost 
 			t,cost = FCFS(arrivalTime,HV,nonConflictingTrajectory)
@@ -83,6 +85,8 @@ if __name__ == '__main__':
 
 	subcasesizes = [4,12,20]
 
+	LANECOUNT = 4 
+	VEACHLANE = 3
 	MILPsubcosts = [[] for i in range(len(subcasesizes))]
 	MILPcosts = []
 	FCFScosts = []
@@ -98,7 +102,7 @@ if __name__ == '__main__':
 		successCount = TESTCOUNT	
 		n = 0
 		while n < TESTCOUNT	:
-			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,4,9,[(0,1),(2,3)])
+			arrivalTime,HV,nonConflictingTrajectory = GenerateTestCase(HVratio,MEANINTERVAL,LANECOUNT,VEACHLANE,[(0,1),(2,3)])
 			milpt,milpcost,runtime = MILP(arrivalTime,HV,nonConflictingTrajectory,obj="throughput")
 			t,fcfscost = FCFS(arrivalTime,HV,nonConflictingTrajectory)
 			if milpcost == -1: #gurobi solve fail
